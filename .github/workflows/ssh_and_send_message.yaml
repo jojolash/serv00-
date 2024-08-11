@@ -1,6 +1,7 @@
 name: Daily SSH Command and Send Telegram Message
 
 on:
+  workflow_dispatch:  # 允许手动触发工作流
   schedule:
     - cron: '0 0 * * *'  # 每天 UTC 时间 00:00 执行
 
@@ -17,7 +18,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sshpass python3-pip
           pip3 install requests
-          sshpass -V  # 输出 sshpass 版本以确认安装成功
+          sshpass -V  # 确认 sshpass 安装成功
 
       - name: Execute SSH Command
         id: ssh_command
@@ -26,9 +27,11 @@ jobs:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
         run: |
+          echo "Connecting to $SSH_HOST..."
           sshpass -p $SSH_PASSWORD ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST \
             'curl -s https://raw.githubusercontent.com/youqishi1/Sing-box/main/hy2.sh | UUID=248d5250-f57b-47ff-9b42-54120bd2e2ec PORT=1372 NEZHA_SERVER=www.bing.com NEZHA_PORT=5555 NEZHA_KEY=xiaowang bash' \
             > ssh_output.txt 2>&1 || { echo "SSH command failed"; exit 1; }
+          cat ssh_output.txt  # 输出 SSH 命令的执行结果
 
       - name: Send Telegram Message
         env:
@@ -55,5 +58,4 @@ if __name__ == '__main__':
     with open('ssh_output.txt', 'r') as file:
         message = file.read()
     send_telegram_message(message)
-    "
-    || { echo "Failed to send Telegram message"; exit 1; }
+          " || { echo "Failed to send Telegram message"; exit 1; }
