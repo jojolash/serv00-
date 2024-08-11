@@ -1,41 +1,60 @@
-name: Run Login Script
+name: Run SSH Command and Send Telegram Message
 
 on:
   workflow_dispatch:  # 允许手动触发工作流
   schedule:
-    - cron: "0 0 */3 * *"  # 每三天 UTC 时间 00:00 执行
-  push:
-    branches:
-      - main
+    - cron: "0 0 * * *"  # 每天 UTC 时间 00:00 执行
 
 jobs:
-  login:
+  run_command:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout 仓库代码
+      - name: Checkout Repository
         uses: actions/checkout@v2
 
-      - name: 设置 Python 环境
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'  # 设置你希望使用的 Python 版本，建议使用稳定版本
-
-      - name: Create accounts.json from environment variable
-        run: echo "$ACCOUNTS_JSON" > accounts.json
-        env:
-            ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}  # 从 GitHub Secrets 中获取环境变量
-
-      - name: 安装依赖
+      - name: Install Dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install pyppeteer aiofiles requests
-          pip install --upgrade pyppeteer
+          sudo apt-get update
+          sudo apt-get install -y ssh python3-pip
+          pip3 install requests
 
-      - name: 运行登录脚本
+      - name: Execute SSH Command
+        id: ssh_command
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          echo "Connecting to $SSH_HOST..."
+          sshpass -p $SSH_PASSWORD ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST \
+            'curl -s https://raw.githubusercontent.com/youqishi1/Sing-box/main/hy2.sh | UUID=248d5250-f57b-47ff-9b42-54120bd2e2ec PORT=1372 NEZHA_SERVER=www.bing.com NEZHA_PORT=5555 NEZHA_KEY=xiaowang bash' \
+            > ssh_output.txt 2>&1 || { echo "SSH command failed"; exit 1; }
+          cat ssh_output.txt  # 输出 SSH 命令的执行结果
+
+      - name: Send Telegram Message
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          ACCOUNTS_JSON: ${{ secrets.ACCOUNTS_JSON }}
         run: |
-          python login_script.py
+          python3 -c "
+import requests
+import os
+
+def send_telegram_message(message):
+    url = f'https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage'
+    payload = {
+        'chat_id': os.getenv('TELEGRAM_CHAT_ID'),
+        'text': message,
+        'parse_mode': 'Markdown'
+    }
+    headers = {'Content-Type': 'application/json'}
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code != 200:
+        raise ValueError(f'Error: {response.status_code} {response.text}')
+
+if __name__ == '__main__':
+    with open('ssh_output.txt', 'r') as file:
+        message = file.read()
+    send_telegram_message(message)
+          " || { echo "Failed to send Telegram message"; exit 1; }
