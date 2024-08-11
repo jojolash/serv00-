@@ -57,4 +57,4 @@ if __name__ == '__main__':
     with open('ssh_output.txt', 'r') as file:
         message = file.read()
     send_telegram_message(message)
-          " || { echo "Failed to send Telegram message"; exit 1; }
+          "
